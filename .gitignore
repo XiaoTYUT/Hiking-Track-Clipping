@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 虚拟环境
+.venv/
+venv/
+
+# 测试/导出产物（保留 cat.kml 作为测试样例）
+out_*.kml
+*.png
+
+# IDE
+.idea/
+.vscode/
