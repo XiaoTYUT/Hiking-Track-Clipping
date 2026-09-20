@@ -596,7 +596,12 @@ class CropApp:
 
 def main():
     root = tk.Tk()
-    initial = sys.argv[1] if len(sys.argv) > 1 else None
+    # 测试阶段：未指定文件时默认加载脚本同目录下的 cat.kml
+    if len(sys.argv) > 1:
+        initial = sys.argv[1]
+    else:
+        default_kml = Path(__file__).parent / "cat.kml"
+        initial = str(default_kml) if default_kml.exists() else None
     CropApp(root, initial_file=initial)
     root.mainloop()
 
