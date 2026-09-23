@@ -198,18 +198,15 @@ class CropApp:
         self.canvas.mpl_connect("button_press_event", self._on_press)
         self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.mpl_connect("button_release_event", self._on_release)
-        # 鼠标滚轮：以光标为中心缩放，用于精细化裁剪
+        # 鼠标滚轮：整个画布上滚都缩放轨迹平面图（不要求光标在平面图内）
         self.canvas.get_tk_widget().bind("<MouseWheel>", self._on_wheel)
-        # 方向键平移轨迹平面图（焦点需在画布上）
-        w = self.canvas.get_tk_widget()
-        w.bind("<Up>", lambda e: self._pan_track(0, +1))
-        w.bind("<Down>", lambda e: self._pan_track(0, -1))
-        w.bind("<Left>", lambda e: self._pan_track(-1, 0))
-        w.bind("<Right>", lambda e: self._pan_track(+1, 0))
-        # Home 键重置平面图到全景
-        w.bind("<Home>", lambda e: self._reset_track_view())
-        # 画布需可获取焦点
-        w.config(takefocus=True)
+        # 方向键 + Home 绑定到根窗口，焦点在哪都生效
+        r = self.root
+        r.bind("<Up>", lambda e: self._pan_track(0, +1))
+        r.bind("<Down>", lambda e: self._pan_track(0, -1))
+        r.bind("<Left>", lambda e: self._pan_track(-1, 0))
+        r.bind("<Right>", lambda e: self._pan_track(+1, 0))
+        r.bind("<Home>", lambda e: self._reset_track_view())
 
     # ================= 数据加载 =================
     def load_file(self, path: str):
@@ -578,17 +575,21 @@ class CropApp:
             self._refresh_buttons()
 
     def _on_wheel(self, event):
-        """滚轮缩放：仅作用于轨迹平面图（以光标为中心）。
+        """滚轮缩放轨迹平面图。整个画布上滚都生效。
 
-        海拔剖面图由 _update_selection 实时聚焦到 A-B 选区，不响应滚轮。
+        光标在平面图内 → 以光标为中心缩放；否则以当前视野中心为锚。
         """
         if self.track is None:
             return
         ax = self.ax_track
-        if not ax.bbox.contains(event.x, event.y):
-            return
-        factor = 2.5 ** (event.delta / 120)  # 向上滚 → 放大，向下滚 → 缩小（每格 2.5 倍）
-        x, y = ax.transData.inverted().transform((event.x, event.y))
+        factor = 2.5 ** (event.delta / 120)  # 向上滚 → 放大，向下滚 → 缩小
+        # 以光标位置或视野中心为锚点
+        if ax.bbox.contains(event.x, event.y):
+            x, y = ax.transData.inverted().transform((event.x, event.y))
+        else:
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            x, y = (xmin + xmax) / 2, (ymin + ymax) / 2
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
         ax.set_xlim(x - (x - xmin) / factor, x + (xmax - x) / factor)
