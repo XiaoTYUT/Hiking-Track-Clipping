@@ -53,6 +53,20 @@ def main():
     assert w_after < w_before, "放大后视野应变窄"
     shot(app, "shot_2_zoomed.png")
 
+    # ---- 滚轮缩小 5 次，验证可以缩小回来 ----
+    w_zoomed = app.ax_track.get_xlim()[1] - app.ax_track.get_xlim()[0]
+    for _ in range(5):
+        app._on_wheel(FakeWheel(cx, cy, -120))
+    w_out = app.ax_track.get_xlim()[1] - app.ax_track.get_xlim()[0]
+    print(f"滚轮缩小: 视图宽 {w_zoomed:.0f}m -> {w_out:.0f}m (扩大={w_out > w_zoomed})")
+    assert w_out > w_zoomed, f"缩小后视野应变宽 (实际 {w_zoomed:.0f}->{w_out:.0f})"
+
+    # ---- Home 键复位到全景 ----
+    app._reset_track_view()
+    w_home = app.ax_track.get_xlim()[1] - app.ax_track.get_xlim()[0]
+    print(f"Home 复位: 视图宽 {w_home:.0f}m (全景={w_home:.0f}m)")
+    assert abs(w_home - w_before) < 1, f"Home 应复位到全景 (实际 {w_home:.0f}, 全景 {w_before:.0f})"
+
     # 回到全景
     app.ax_track.set_xlim(*full_view[0])
     app.ax_track.set_ylim(*full_view[1])

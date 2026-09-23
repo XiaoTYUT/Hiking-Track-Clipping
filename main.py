@@ -110,8 +110,8 @@ class CropApp:
         self.ax_track = self.fig.add_subplot(gs[0])
         self.ax_prof = self.fig.add_subplot(gs[1])
         self.ax_track.axis("off")
-        self.ax_track.set_title("轨迹平面图：滚轮缩放 · 方向键平移 · 左键设 A 点 · 右键设 B 点 · 拖动手柄微调", fontsize=10)
-        self.ax_prof.set_title("海拔剖面：实时跟随 A-B 选区聚焦 · 左键设 A · 右键设 B · 拖竖线微调", fontsize=10)
+        self.ax_track.set_title("轨迹平面图：滚轮缩放（2.5x/格）· 方向键平移 · Home 复位 · 左键设 A · 右键设 B · 拖手柄微调", fontsize=10)
+        self.ax_prof.set_title("海拔剖面：跟随 A-B 选区聚焦（含两侧边距）· 左键设 A · 右键设 B · 拖竖线微调", fontsize=10)
         self.ax_prof.set_xlabel("累计里程 (km)")
         self.ax_prof.set_ylabel("海拔 (m)")
         self.ax_prof.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -204,6 +204,8 @@ class CropApp:
         w.bind("<Down>", lambda e: self._pan_track(0, -1))
         w.bind("<Left>", lambda e: self._pan_track(-1, 0))
         w.bind("<Right>", lambda e: self._pan_track(+1, 0))
+        # Home 键重置平面图到全景
+        w.bind("<Home>", lambda e: self._reset_track_view())
         # 画布需可获取焦点
         w.config(takefocus=True)
 
@@ -245,8 +247,8 @@ class CropApp:
         ax_t.clear()
         ax_p.clear()
         ax_t.axis("off")
-        ax_t.set_title("轨迹平面图：滚轮缩放 · 方向键平移 · 左键设 A 点 · 右键设 B 点 · 拖动手柄微调", fontsize=10)
-        ax_p.set_title("海拔剖面：实时跟随 A-B 选区聚焦 · 左键设 A · 右键设 B · 拖竖线微调", fontsize=10)
+        ax_t.set_title("轨迹平面图：滚轮缩放（2.5x/格）· 方向键平移 · Home 复位 · 左键设 A · 右键设 B · 拖手柄微调", fontsize=10)
+        ax_p.set_title("海拔剖面：跟随 A-B 选区聚焦（含两侧边距）· 左键设 A · 右键设 B · 拖竖线微调", fontsize=10)
         ax_p.set_xlabel("累计里程 (km)")
         ax_p.set_ylabel("海拔 (m)")
         ax_p.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -299,8 +301,10 @@ class CropApp:
         self.lbl_b = ax_p.annotate("B", (0, 0), fontsize=9, fontweight="bold", color=C_B,
                                    xytext=(4, 4), textcoords="offset points", zorder=7)
 
-        # 轨迹图等比例
-        ax_t.set_aspect("equal", adjustable="datalim")
+        # 轨迹图等比例（box 模式：缩放时改变盒形而非数据范围，避免缩小时被反向修正）
+        ax_t.set_aspect("equal", adjustable="box")
+        # 保存全景范围供 Home 键重置
+        self._full_track_view = (ax_t.get_xlim(), ax_t.get_ylim())
 
         self._update_selection(refresh_all=True)
         self._refresh_stats()
@@ -534,7 +538,7 @@ class CropApp:
         ax = self.ax_track
         if not ax.bbox.contains(event.x, event.y):
             return
-        factor = 1.8 ** (event.delta / 120)  # 向上滚 → factor>1 放大（每格 1.8 倍）
+        factor = 2.5 ** (event.delta / 120)  # 向上滚 → 放大，向下滚 → 缩小（每格 2.5 倍）
         x, y = ax.transData.inverted().transform((event.x, event.y))
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
@@ -543,17 +547,28 @@ class CropApp:
         self.canvas.draw_idle()
 
     def _focus_prof(self, a: int, b: int):
-        """剖面图实时聚焦到 A-B 选区：X 轴 = 选区累计里程范围，Y 轴 = 选区内海拔范围。"""
+        """剖面图实时聚焦到 A-B 选区：X 轴 = 选区里程 + 两侧边距，Y 轴 = 选区内海拔范围。
+
+        两侧各加 20% 选区宽度的边距，让用户能看到 A 前后的点并扩展选区。
+        """
         cum = self.cum
         eles = [p.ele for p in self.track.points]
-        x0, x1 = cum[a], cum[b]
+        sel = cum[b] - cum[a]
+        margin = max(sel * 0.2, cum[-1] * 0.01)  # 选区 20% 或全程 1%，取大值
+        x0 = max(0, cum[a] - margin)
+        x1 = min(cum[-1], cum[b] + margin)
         # X 最小跨度，避免两点过近时视图塌缩
         span = cum[-1] * 0.02 if cum[-1] > 0 else 50
         if x1 - x0 < span:
             mid = (x0 + x1) / 2
             x0 = max(0, mid - span / 2)
-            x1 = mid + span / 2
-        sub = eles[a:b + 1]
+            x1 = min(cum[-1], mid + span / 2)
+        # Y 轴用选区内海拔范围（含边距内的点）
+        i0 = bisect.bisect_left(cum, x0)
+        i1 = bisect.bisect_right(cum, x1)
+        sub = eles[i0:i1]
+        if not sub:
+            sub = eles[a:b + 1]
         ylo, yhi = min(sub), max(sub)
         ypad = max((yhi - ylo) * 0.12, 5)
         ylo, yhi = ylo - ypad, yhi + ypad
@@ -577,6 +592,15 @@ class CropApp:
             ax.set_xlim(xmin + dx * sx, xmax + dx * sx)
         if dy:
             ax.set_ylim(ymin + dy * sy, ymax + dy * sy)
+        self.canvas.draw_idle()
+
+    def _reset_track_view(self):
+        """Home 键：重置轨迹平面图到全景。"""
+        if self.track is None or not hasattr(self, "_full_track_view"):
+            return
+        xlim, ylim = self._full_track_view
+        self.ax_track.set_xlim(*xlim)
+        self.ax_track.set_ylim(*ylim)
         self.canvas.draw_idle()
 
     # ================= 操作 =================
