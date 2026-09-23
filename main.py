@@ -111,7 +111,7 @@ class CropApp:
         self.ax_prof = self.fig.add_subplot(gs[1])
         self.ax_track.axis("off")
         self.ax_track.set_title("轨迹平面图：滚轮缩放（以光标为中心）· 方向键平移 · 工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
-        self.ax_prof.set_title("海拔剖面：滚轮缩放精细选段，拖动 A/B 竖线", fontsize=10)
+        self.ax_prof.set_title("海拔剖面：实时跟随 A-B 选区聚焦，拖动 A/B 竖线选段", fontsize=10)
         self.ax_prof.set_xlabel("累计里程 (km)")
         self.ax_prof.set_ylabel("海拔 (m)")
         self.ax_prof.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -246,6 +246,7 @@ class CropApp:
         ax_p.clear()
         ax_t.axis("off")
         ax_t.set_title("轨迹平面图：滚轮缩放（以光标为中心）· 方向键平移 · 工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
+        ax_p.set_title("海拔剖面：实时跟随 A-B 选区聚焦，拖动 A/B 竖线选段", fontsize=10)
         ax_p.set_xlabel("累计里程 (km)")
         ax_p.set_ylabel("海拔 (m)")
         ax_p.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -312,6 +313,8 @@ class CropApp:
         if self.track is None:
             return
         a, b = sorted((self.a_idx, self.b_idx))
+        # 剖面图实时聚焦到 A-B 选区（更新 _ele_lim 供 span/hline 使用）
+        self._focus_prof(a, b)
         xs, ys, cum = self.xs, self.ys, self.cum
         eles = [p.ele for p in self.track.points]
         self.sel_t.set_data(xs[a:b + 1], ys[a:b + 1])
@@ -512,20 +515,41 @@ class CropApp:
             self._refresh_buttons()
 
     def _on_wheel(self, event):
-        """滚轮缩放：以光标位置为中心，光标在哪个子图就缩放哪个子图。"""
+        """滚轮缩放：仅作用于轨迹平面图（以光标为中心）。
+
+        海拔剖面图由 _update_selection 实时聚焦到 A-B 选区，不响应滚轮。
+        """
         if self.track is None:
             return
+        ax = self.ax_track
+        if not ax.bbox.contains(event.x, event.y):
+            return
         factor = 1.25 ** (event.delta / 120)  # 向上滚 → factor>1 放大
-        for ax in (self.ax_track, self.ax_prof):
-            if not ax.bbox.contains(event.x, event.y):
-                continue
-            x, y = ax.transData.inverted().transform((event.x, event.y))
-            xmin, xmax = ax.get_xlim()
-            ymin, ymax = ax.get_ylim()
-            ax.set_xlim(x - (x - xmin) / factor, x + (xmax - x) / factor)
-            ax.set_ylim(y - (y - ymin) / factor, y + (ymax - y) / factor)
-            self.canvas.draw_idle()
-            break
+        x, y = ax.transData.inverted().transform((event.x, event.y))
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        ax.set_xlim(x - (x - xmin) / factor, x + (xmax - x) / factor)
+        ax.set_ylim(y - (y - ymin) / factor, y + (ymax - y) / factor)
+        self.canvas.draw_idle()
+
+    def _focus_prof(self, a: int, b: int):
+        """剖面图实时聚焦到 A-B 选区：X 轴 = 选区累计里程范围，Y 轴 = 选区内海拔范围。"""
+        cum = self.cum
+        eles = [p.ele for p in self.track.points]
+        x0, x1 = cum[a], cum[b]
+        # X 最小跨度，避免两点过近时视图塌缩
+        span = cum[-1] * 0.02 if cum[-1] > 0 else 50
+        if x1 - x0 < span:
+            mid = (x0 + x1) / 2
+            x0 = max(0, mid - span / 2)
+            x1 = mid + span / 2
+        sub = eles[a:b + 1]
+        ylo, yhi = min(sub), max(sub)
+        ypad = max((yhi - ylo) * 0.12, 5)
+        ylo, yhi = ylo - ypad, yhi + ypad
+        self._ele_lim = (ylo, yhi)
+        self.ax_prof.set_xlim(x0, x1)
+        self.ax_prof.set_ylim(ylo, yhi)
 
     def _pan_track(self, dx: int, dy: int):
         """方向键平移轨迹平面图：步长 = 当前视野的 20%。
