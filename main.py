@@ -534,7 +534,7 @@ class CropApp:
         ax = self.ax_track
         if not ax.bbox.contains(event.x, event.y):
             return
-        factor = 1.25 ** (event.delta / 120)  # 向上滚 → factor>1 放大
+        factor = 1.8 ** (event.delta / 120)  # 向上滚 → factor>1 放大（每格 1.8 倍）
         x, y = ax.transData.inverted().transform((event.x, event.y))
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
