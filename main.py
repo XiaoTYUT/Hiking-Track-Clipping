@@ -110,7 +110,7 @@ class CropApp:
         self.ax_track = self.fig.add_subplot(gs[0])
         self.ax_prof = self.fig.add_subplot(gs[1])
         self.ax_track.axis("off")
-        self.ax_track.set_title("轨迹平面图：滚轮缩放（以光标为中心），工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
+        self.ax_track.set_title("轨迹平面图：滚轮缩放（以光标为中心）· WASD 平移 · 工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
         self.ax_prof.set_title("海拔剖面：滚轮缩放精细选段，拖动 A/B 竖线", fontsize=10)
         self.ax_prof.set_xlabel("累计里程 (km)")
         self.ax_prof.set_ylabel("海拔 (m)")
@@ -198,6 +198,19 @@ class CropApp:
         self.canvas.mpl_connect("button_release_event", self._on_release)
         # 鼠标滚轮：以光标为中心缩放，用于精细化裁剪
         self.canvas.get_tk_widget().bind("<MouseWheel>", self._on_wheel)
+        # WASD 平移轨迹平面图（焦点需在画布上）
+        w = self.canvas.get_tk_widget()
+        w.bind("<w>", lambda e: self._pan_track(0, +1))
+        w.bind("<s>", lambda e: self._pan_track(0, -1))
+        w.bind("<a>", lambda e: self._pan_track(-1, 0))
+        w.bind("<d>", lambda e: self._pan_track(+1, 0))
+        # 大写 WASD 也支持（按住 Shift 时）
+        w.bind("<W>", lambda e: self._pan_track(0, +1))
+        w.bind("<S>", lambda e: self._pan_track(0, -1))
+        w.bind("<A>", lambda e: self._pan_track(-1, 0))
+        w.bind("<D>", lambda e: self._pan_track(+1, 0))
+        # 画布需可获取焦点
+        w.config(takefocus=True)
 
     # ================= 数据加载 =================
     def load_file(self, path: str):
@@ -237,7 +250,7 @@ class CropApp:
         ax_t.clear()
         ax_p.clear()
         ax_t.axis("off")
-        ax_t.set_title("轨迹平面图：滚轮缩放（以光标为中心），工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
+        ax_t.set_title("轨迹平面图：滚轮缩放（以光标为中心）· WASD 平移 · 工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
         ax_p.set_xlabel("累计里程 (km)")
         ax_p.set_ylabel("海拔 (m)")
         ax_p.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -518,6 +531,24 @@ class CropApp:
             ax.set_ylim(y - (y - ymin) / factor, y + (ymax - y) / factor)
             self.canvas.draw_idle()
             break
+
+    def _pan_track(self, dx: int, dy: int):
+        """WASD 平移轨迹平面图：步长 = 当前视野的 20%。
+
+        dx: -1(A左) / +1(D右)；dy: +1(W上) / -1(S下)。
+        """
+        if self.track is None:
+            return
+        ax = self.ax_track
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        sx = (xmax - xmin) * 0.2
+        sy = (ymax - ymin) * 0.2
+        if dx:
+            ax.set_xlim(xmin + dx * sx, xmax + dx * sx)
+        if dy:
+            ax.set_ylim(ymin + dy * sy, ymax + dy * sy)
+        self.canvas.draw_idle()
 
     # ================= 操作 =================
     def on_keep(self):
