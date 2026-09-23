@@ -22,7 +22,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt  # noqa: E402  (只为设置字体)
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
-from matplotlib.patches import Polygon  # noqa: E402
+from matplotlib.patches import Polygon, Rectangle  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 # 中文字体
@@ -306,11 +306,58 @@ class CropApp:
         # 保存全景范围供 Home 键重置
         self._full_track_view = (ax_t.get_xlim(), ax_t.get_ylim())
 
+        # ---- 缩略图（总览）：显示全程 + 当前视野框 ----
+        self._build_minimap()
+
         self._update_selection(refresh_all=True)
         self._refresh_stats()
         self._refresh_deleted()
         self._refresh_buttons()
         self.canvas.draw_idle()
+
+    # ================= 缩略图（总览） =================
+    def _build_minimap(self):
+        """在轨迹平面图右上角创建缩略图，显示全程 + 当前视野框。"""
+        # 移除旧的 inset
+        if hasattr(self, "_ax_mini"):
+            self._ax_mini.remove()
+        # 创建 inset：右上角，宽高各占主图的 28%
+        self._ax_mini = self.ax_track.inset_axes(
+            [0.72, 0.72, 0.27, 0.27], transform=self.ax_track.transAxes)
+        axm = self._ax_mini
+        axm.set_facecolor("#f5f5f5")
+        axm.set_xticks([])
+        axm.set_yticks([])
+        for spine in axm.spines.values():
+            spine.set_edgecolor("#999")
+            spine.set_linewidth(1.2)
+
+        xs, ys = self.xs, self.ys
+        # 全程（灰）
+        axm.plot(xs, ys, color=C_ORIG, lw=0.8, zorder=1)
+        # 保留段（蓝）
+        for s, e in self.crop.ranges:
+            axm.plot(xs[s:e + 1], ys[s:e + 1], color=C_KEEP, lw=1.2, zorder=2)
+        axm.set_aspect("equal", adjustable="box")
+        axm.margins(0.05)
+        axm.autoscale()
+
+        # 当前视野框（红边矩形）
+        self._mini_rect = Rectangle(
+            (0, 0), 1, 1, fill=True, facecolor=C_A, alpha=0.15,
+            edgecolor=C_A, lw=1.5, zorder=5)
+        axm.add_patch(self._mini_rect)
+        self._update_minimap()
+
+    def _update_minimap(self):
+        """根据轨迹平面图当前视野更新缩略图中的矩形框。"""
+        if not hasattr(self, "_mini_rect") or self._mini_rect is None:
+            return
+        xmin, xmax = self.ax_track.get_xlim()
+        ymin, ymax = self.ax_track.get_ylim()
+        self._mini_rect.set_xy((xmin, ymin))
+        self._mini_rect.set_width(xmax - xmin)
+        self._mini_rect.set_height(ymax - ymin)
 
     def _update_selection(self, refresh_all: bool = False):
         """拖动手柄时更新选区艺术对象与选区统计。"""
@@ -544,6 +591,7 @@ class CropApp:
         ymin, ymax = ax.get_ylim()
         ax.set_xlim(x - (x - xmin) / factor, x + (xmax - x) / factor)
         ax.set_ylim(y - (y - ymin) / factor, y + (ymax - y) / factor)
+        self._update_minimap()
         self.canvas.draw_idle()
 
     def _focus_prof(self, a: int, b: int):
@@ -592,6 +640,7 @@ class CropApp:
             ax.set_xlim(xmin + dx * sx, xmax + dx * sx)
         if dy:
             ax.set_ylim(ymin + dy * sy, ymax + dy * sy)
+        self._update_minimap()
         self.canvas.draw_idle()
 
     def _reset_track_view(self):
@@ -601,6 +650,7 @@ class CropApp:
         xlim, ylim = self._full_track_view
         self.ax_track.set_xlim(*xlim)
         self.ax_track.set_ylim(*ylim)
+        self._update_minimap()
         self.canvas.draw_idle()
 
     # ================= 操作 =================
