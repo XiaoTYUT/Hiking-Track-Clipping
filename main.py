@@ -110,8 +110,8 @@ class CropApp:
         self.ax_track = self.fig.add_subplot(gs[0])
         self.ax_prof = self.fig.add_subplot(gs[1])
         self.ax_track.axis("off")
-        self.ax_track.set_title("轨迹平面图：滚轮缩放（以光标为中心）· 方向键平移 · 工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
-        self.ax_prof.set_title("海拔剖面：实时跟随 A-B 选区聚焦，拖动 A/B 竖线选段", fontsize=10)
+        self.ax_track.set_title("轨迹平面图：滚轮缩放 · 方向键平移 · 左键设 A 点 · 右键设 B 点 · 拖动手柄微调", fontsize=10)
+        self.ax_prof.set_title("海拔剖面：实时跟随 A-B 选区聚焦 · 左键设 A · 右键设 B · 拖竖线微调", fontsize=10)
         self.ax_prof.set_xlabel("累计里程 (km)")
         self.ax_prof.set_ylabel("海拔 (m)")
         self.ax_prof.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -245,8 +245,8 @@ class CropApp:
         ax_t.clear()
         ax_p.clear()
         ax_t.axis("off")
-        ax_t.set_title("轨迹平面图：滚轮缩放（以光标为中心）· 方向键平移 · 工具栏可框选放大/平移，点击或拖圆点手柄选段", fontsize=10)
-        ax_p.set_title("海拔剖面：实时跟随 A-B 选区聚焦，拖动 A/B 竖线选段", fontsize=10)
+        ax_t.set_title("轨迹平面图：滚轮缩放 · 方向键平移 · 左键设 A 点 · 右键设 B 点 · 拖动手柄微调", fontsize=10)
+        ax_p.set_title("海拔剖面：实时跟随 A-B 选区聚焦 · 左键设 A · 右键设 B · 拖竖线微调", fontsize=10)
         ax_p.set_xlabel("累计里程 (km)")
         ax_p.set_ylabel("海拔 (m)")
         ax_p.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v/1000:g}"))
@@ -431,11 +431,16 @@ class CropApp:
         self.status_var.set(msg)
 
     # ================= 交互：手柄拖动 =================
-    def _handle_at(self, event):
-        """判断事件是否命中某个手柄（任一图内），返回 'a'/'b'/None。"""
+    def _handle_at(self, event, want: str | None = None):
+        """判断事件是否命中手柄，返回 'a'/'b'/None。
+
+        want: 只检查指定手柄（'a' 或 'b'）；None 表示两者都检查。
+        """
         if self.track is None:
             return None
-        for name, idx in (("a", self.a_idx), ("b", self.b_idx)):
+        names = ((want, getattr(self, f"{want}_idx")),) if want else \
+                (("a", self.a_idx), ("b", self.b_idx))
+        for name, idx in names:
             if self._in_axes(event):
                 dx_t = abs(event.x - self.ax_track.transData.transform((self.xs[idx], self.ys[idx]))[0])
                 dy_t = abs(event.y - self.ax_track.transData.transform((self.xs[idx], self.ys[idx]))[1])
@@ -477,23 +482,28 @@ class CropApp:
         return None
 
     def _on_press(self, event):
-        if not self._in_axes(event) or event.button != 1:
+        if not self._in_axes(event) or self.track is None:
             return
-        hit = self._handle_at(event)
-        if hit:
-            self._drag = hit
-            self.canvas.get_tk_widget().config(cursor="sb_h_double_arrow")
-            return
-        # 空白处点击：把最近的手柄移到点击处
         idx = self._nearest_index(event)
         if idx is None:
             return
         idx = max(0, min(self.track.n - 1, idx))
-        if abs(idx - self.a_idx) <= abs(idx - self.b_idx):
-            self.a_idx = idx
-        else:
-            self.b_idx = idx
-        self._update_selection(refresh_all=True)
+        if event.button == 1:
+            # 左键 → A：命中 A 手柄则拖动，否则把 A 移到最近点
+            if self._handle_at(event, "a"):
+                self._drag = "a"
+                self.canvas.get_tk_widget().config(cursor="sb_h_double_arrow")
+            else:
+                self.a_idx = idx
+                self._update_selection(refresh_all=True)
+        elif event.button == 3:
+            # 右键 → B：命中 B 手柄则拖动，否则把 B 移到最近点
+            if self._handle_at(event, "b"):
+                self._drag = "b"
+                self.canvas.get_tk_widget().config(cursor="sb_h_double_arrow")
+            else:
+                self.b_idx = idx
+                self._update_selection(refresh_all=True)
 
     def _on_motion(self, event):
         if self._drag is None or not self._in_axes(event) or self.track is None:
