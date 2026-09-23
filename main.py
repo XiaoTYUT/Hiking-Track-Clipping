@@ -97,6 +97,8 @@ class CropApp:
         self.btn_undo.pack(side=tk.LEFT, padx=(16, 0))
         self.btn_redo = ttk.Button(bar, text="重做", command=self.on_redo, state=tk.DISABLED, width=8)
         self.btn_redo.pack(side=tk.LEFT, padx=(6, 0))
+        self.btn_home = ttk.Button(bar, text="复原视图", command=self._reset_track_view, width=10)
+        self.btn_home.pack(side=tk.LEFT, padx=(6, 0))
         self.btn_export = ttk.Button(bar, text="导出 KML…", command=self.on_export, state=tk.DISABLED)
         self.btn_export.pack(side=tk.RIGHT)
 
