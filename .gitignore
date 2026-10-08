@@ -8,9 +8,13 @@ __pycache__/
 .venv/
 venv/
 
-# 测试/导出产物（保留 cat.kml 作为测试样例）
+# 测试/导出产物
 out_*.kml
+out_*.gpx
 *.png
+
+# 测试样例（含真实徒步数据，不上传仓库）
+cat.kml
 
 # IDE
 .idea/

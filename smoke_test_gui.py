@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""GUI 冒烟测试：不进 mainloop，构建窗口 → 加载 → 缩放 → 模拟操作 → 删除时间段校验 → 导出。"""
+"""GUI 冒烟测试：不进 mainloop，构建窗口 → 加载 → 缩放 → 模拟操作 → 删除时间段校验 → 导出。
+
+注意：cat.kml 含真实徒步数据，未上传仓库。请将本地 cat.kml 放到脚本同目录后运行。
+"""
 import sys
 from pathlib import Path
 
@@ -21,6 +24,10 @@ def shot(app, name):
 
 
 def main():
+    if not (ROOT / "cat.kml").exists():
+        print("[SKIP] 未找到 cat.kml（含真实徒步数据，未上传仓库）。")
+        print("       请将本地 cat.kml 放到脚本同目录后重试。")
+        return 0
     root = tk.Tk()
     root.geometry("1280x820+60+40")
     app = CropApp(root, initial_file=str(ROOT / "cat.kml"))

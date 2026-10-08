@@ -2,24 +2,12 @@
 """内核全链路验证：用 cat.kml 跑 解析 → 统计 → 裁剪 → 导出 → 回读校验。
 
 cat.kml 特点：同一次徒步暂停/继续产生了 3 个 gx:Track（2478+95+147=2720 点）。
+注意：cat.kml 含真实徒步数据，未上传至仓库。请将本地 cat.kml 放到脚本同目录后运行。
 """
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-
-from core.parser import (
-    KML_NS,
-    parse_kml,
-    find_all_track_elems,
-    find_document_extended,
-    find_placemark_by_id,
-    q,
-)
-from core.stats import cumulative_distances, stats_for_ranges
-from core.cropper import CropState
-from core.exporter import export_kml
-import xml.etree.ElementTree as ET
 
 KML = Path(__file__).parent / "cat.kml"
 OUT_KEEP = Path(__file__).parent / "out_verify_keep.kml"
@@ -32,6 +20,10 @@ SPANS_META = [(0, 2477), (2478, 2572), (2573, 2719)]
 
 
 def main():
+    if not KML.exists():
+        print(f"[SKIP] 未找到 {KML.name}（含真实徒步数据，未上传仓库）。")
+        print("       请将本地 cat.kml 放到脚本同目录后重试。")
+        return 0
     ok = True
 
     def check(cond, msg):
@@ -39,6 +31,18 @@ def main():
         print(("[PASS] " if cond else "[FAIL] ") + msg)
         if not cond:
             ok = False
+
+    from core.parser import (
+        KML_NS,
+        parse_kml,
+        find_all_track_elems,
+        find_document_extended,
+        find_placemark_by_id,
+        q,
+    )
+    from core.stats import cumulative_distances, stats_for_ranges
+    from core.cropper import CropState
+    from core.exporter import export_kml
 
     track = parse_kml(str(KML))
     print(f"轨迹: {track.name}  点数: {track.n}  gx:Track: {track.is_gx_track}")

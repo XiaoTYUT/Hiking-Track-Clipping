@@ -2,7 +2,7 @@
 """徒步轨迹裁剪器 —— 桌面 GUI 入口。
 
 用法：
-    C:\\Users\\xiao\\miniconda3\\envs\\test_skill\\python.exe main.py [轨迹.kml]
+    python main.py [轨迹.kml]
 
 界面：上方轨迹平面图（等比例）+ 下方海拔剖面图，两图联动选段。
 A/B 两个手柄：拖动剖面图上的竖线，或直接点击轨迹图/剖面图移动最近的手柄。
